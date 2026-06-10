@@ -1,0 +1,5 @@
+.env
+captures/
+shot.png
+output.txt
+__pycache__/
