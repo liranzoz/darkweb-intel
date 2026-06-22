@@ -1,5 +1,7 @@
 .env
 captures/
 shot.png
-output.txt
+*.txt
 __pycache__/
+cron.log
+.DS_Store
