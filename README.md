@@ -31,7 +31,7 @@ Live findings, auto-categorized and sorted by threat type — data leaks, market
 
 <div align="center">
 
-![Dashboard](docs/dashboard.png)
+![Dashboard](dash/dashboard.png)
 
 </div>
 
