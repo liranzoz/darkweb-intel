@@ -25,7 +25,7 @@ from ai_reader import analyze
 
 load_dotenv()
 DB = os.environ["DB_CONN"]
-ROOT = Path(__file__).parent.parent
+ROOT = Path("/home/liran/darkweb-intel")
 TARGETS_FILE = ROOT / "targets.txt"
 SKIPS_FILE = ROOT / "skips.txt"
 REVIEW_FILE = ROOT / "review.txt"

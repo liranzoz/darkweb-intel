@@ -32,7 +32,7 @@ import discovery
 
 load_dotenv()
 DB = os.environ["DB_CONN"]
-ROOT = Path(__file__).parent.parent
+ROOT = Path("/home/liran/darkweb-intel")
 CAPTURES = (ROOT / "captures").resolve()
 TARGETS_FILE = ROOT / "targets.txt"
 SKIPS_FILE = ROOT / "skips.txt"

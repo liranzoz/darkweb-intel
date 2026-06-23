@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 PROXY = "socks5://127.0.0.1:9050"
-ROOT = Path(__file__).parent.parent
+ROOT = Path("/home/liran/darkweb-intel")
 
 
 def clean(html):

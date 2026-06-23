@@ -55,11 +55,16 @@ Live findings, auto-categorized and sorted by threat type — data leaks, market
 ## 🏗️ Architecture
 
 ```
+   ┌──────────────┐
+   │ targets.txt  │   manual seed URLs (you curate these)
+   └──────┬───────┘
+          │ seed
+          ▼
                     ┌──────────────┐
-   cron (every 2h)  │  producer.py │   scores the frontier, queues the best targets
-   ───────────────► │   (router)   │
+   cron (every 4h)  │  producer.py │   seeds frontier from targets.txt + page_state,
+   ───────────────► │   (router)   │   then drains the top-scored URLs into the queue
                     └──────┬───────┘
-                           │ enqueue
+                           │ enqueue (up to 200/run)
                            ▼
                     ┌──────────────┐
                     │  Redis queue │   "scrape" jobs waiting
@@ -102,7 +107,7 @@ Live findings, auto-categorized and sorted by threat type — data leaks, market
 | **Workers** | RQ + systemd | 3 always-on parallel crawlers |
 | **Storage** | PostgreSQL 16 | Findings, page state, crawl graph |
 | **Dashboard** | Flask | Live findings + screenshot evidence |
-| **Scheduling** | cron | Kicks off the router every 2 hours |
+| **Scheduling** | cron | Kicks off the router every 4 hours |
 
 All infrastructure runs in Docker, bound to `127.0.0.1` and viewed through an SSH tunnel — nothing is exposed to the public internet.
 
