@@ -2,15 +2,8 @@
 AI reader: turn scraped page text into structured, CATEGORIZED threat-intel.
 Uses a local LLM (no data leaves the server). Hard timeout so a stuck call
 can never hang the pipeline.
-
-Two upgrades over the old version:
-  - CLOSED category menu: the model must pick ONE of a fixed set (each with a
-    definition) instead of inventing a free-form 'type'. Far fewer mistags
-    (e.g. a PayPal-transfer scam now lands in 'fraud', not 'malware').
-  - RELEVANCE gate: pages that aren't threat-intel (search engines, blogs,
-    login walls, hosting, broken pages) come back relevant=False, so the
-    worker can drop them instead of storing junk.
 """
+
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -23,17 +16,23 @@ MAX_CHARS = int(os.environ.get("AI_MAX_CHARS", "6000"))  # cap page text sent to
 _client = ollama.Client(timeout=AI_TIMEOUT)
 
 # the ONLY categories the model may choose from
-CATEGORIES = ["data leak", "market", "fraud", "malware", "hacking service", "forum", "other"]
+CATEGORIES = ["data leak", "ransomware", "market", "fraud", "malware",
+              "hacking service", "forum", "directory", "other"]
 
 CATEGORY_ALIASES = {
     "data_leak": "data leak", "leak": "data leak", "leaks": "data leak",
     "data breach": "data leak", "breach": "data leak", "dump": "data leak",
+    "combolist": "data leak", "stealer logs": "data leak",
+    "ransomware group": "ransomware", "extortion": "ransomware",
+    "ransom": "ransomware", "raas": "ransomware",
     "marketplace": "market", "shop": "market", "vendor": "market",
     "scam": "fraud", "carding": "fraud", "cashout": "fraud",
-    "ransomware": "malware", "exploit": "malware", "botnet": "malware",
+    "exploit": "malware", "botnet": "malware", "rat": "malware",
     "hacking": "hacking service", "hacking services": "hacking service",
     "service": "hacking service", "ddos": "hacking service",
     "forums": "forum", "board": "forum", "discussion": "forum",
+    "index": "directory", "link list": "directory", "catalog": "directory",
+    "catalogue": "directory", "wiki": "directory", "links": "directory",
 }
 
 PROMPT = """You are a cyber threat intelligence analyst.
@@ -45,15 +44,21 @@ wikis, personal blogs, hosting/email services, login pages, empty or broken
 pages, anything not about cybercrime.
 
 If relevant, choose EXACTLY ONE category from this list:
-- "data leak": stolen/leaked data shared or sold (databases, credentials, dumps, combolists, stealer logs)
+- "data leak": stolen/leaked data shared or sold (databases, credentials, dumps, combolists, stealer logs) — NOT ransomware groups
+- "ransomware": a ransomware group's blog or leak/extortion site listing victims and threatening to publish their data (e.g. LockBit, RansomHouse, DragonForce, Akira, BlackCat, Play, etc.)
 - "market": a shop or vendor selling goods/services (accounts, drugs, etc.)
 - "fraud": scams, carding, cashout, bank/PayPal transfers, fake money, money laundering
-- "malware": malware, ransomware, exploits, botnets, RATs offered or discussed as tools
+- "malware": malware, exploits, botnets, RATs offered or discussed as tools — NOT ransomware group blogs
 - "hacking service": someone offering to hack, DDoS, spoof, phish, or crack on request
-- "forum": a forum, board, or general discussion / chatter
+- "forum": a forum, board, or community with posts, threads, discussions, or news feeds
+- "directory": a link collection, index, catalog, wiki, or aggregator listing other .onion sites
 - "other": cybercrime-related but none of the above
 
-Important: a page selling money transfers or fake PayPal/bank funds is "fraud", NOT "malware".
+Important rules:
+- A ransomware group's blog listing victims is "ransomware", NOT "data leak" or "malware".
+- A page selling money transfers or fake PayPal/bank funds is "fraud", NOT "malware".
+- A site that is mostly a list of links to other .onion sites is "directory".
+- A news feed or community board with posts/threads is "forum".
 
 Return ONLY a JSON object, nothing else:
 {
