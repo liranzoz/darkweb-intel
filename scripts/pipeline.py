@@ -10,15 +10,26 @@ Usage:
 """
 import os
 import sys
+import shutil
 import psycopg
 from pathlib import Path
 from dotenv import load_dotenv
 from scraper import scrape
 from ai_reader import analyze
+from worker import load_filters, check
 
 load_dotenv()
 DB = os.environ["DB_CONN"]
-TARGETS_FILE = Path(__file__).parent.parent / "targets.txt"
+ROOT = Path(__file__).parent.parent
+TARGETS_FILE = ROOT / "targets.txt"
+SKIPS_FILE = ROOT / "skips.txt"
+
+
+def _log(path, *cols):
+    import datetime
+    stamp = datetime.datetime.now().isoformat(timespec="seconds")
+    with open(path, "a") as f:
+        f.write(" | ".join([stamp, *cols]) + "\n")
 
 
 def save(facts, url, folder):
@@ -36,6 +47,13 @@ def process(url):
     print(f"[*] {url}")
     try:
         folder, title, text = scrape(url)        # fetch + clean + screenshot (via Tor)
+        filters = load_filters()
+        reason, term = check(text, filters)
+        if reason:
+            _log(SKIPS_FILE, url, reason, f"content matched: {term}")
+            shutil.rmtree(folder, ignore_errors=True)
+            print(f"    blocked by content filter ({reason}: {term})")
+            return
         facts = analyze(text)                     # local LLM extracts structured facts
         save(facts, url, folder)                  # persist to database
         print(f"    saved: {facts.get('type', 'unknown')} | evidence: {folder}")

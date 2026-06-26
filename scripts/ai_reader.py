@@ -12,7 +12,7 @@ import ollama
 
 MODEL = os.environ.get("AI_MODEL", "llama3.1:8b")
 AI_TIMEOUT = int(os.environ.get("AI_TIMEOUT", "120"))  # seconds
-MAX_CHARS = int(os.environ.get("AI_MAX_CHARS", "6000"))  # cap page text sent to the model (~1500 tokens)
+MAX_CHARS = int(os.environ.get("AI_MAX_CHARS", "2000"))  # cap for CPU inference (~500 tokens)
 _client = ollama.Client(timeout=AI_TIMEOUT)
 
 # the ONLY categories the model may choose from
@@ -89,7 +89,7 @@ def analyze(post_text):
             model=MODEL,
             messages=[{"role": "user", "content": PROMPT + text}],
             format="json",                 # force ONE valid JSON object, no prose/markdown
-            options={"temperature": 0, "num_ctx": 4096, "num_predict": 256},
+            options={"temperature": 0, "num_ctx": 2048, "num_predict": 256},
         )
         parsed = json.loads(response["message"]["content"])  # whole reply is the object
     except Exception as e:

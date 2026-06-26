@@ -212,6 +212,15 @@ def process_one(raw_url):
     folder, title, text = scrape(url)
     page_hash = hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()
 
+    # content filter: drop pages matching abuse/weapons/drugs/violence keywords
+    filters = load_filters()
+    reason, term = check(text, filters)
+    if reason:
+        log(SKIPS_FILE, url, reason, f"content matched: {term}")
+        _safe_rmtree(folder)
+        print(f"[worker] blocked by content filter ({reason}: {term}), dropped {url}")
+        return "filtered"
+
     with psycopg.connect(DB) as conn:
         # 1. unchanged content -> no LLM, just refresh + drop capture
         if _last_hash(conn, url) == page_hash:
@@ -247,20 +256,27 @@ def process_one(raw_url):
         except Exception as e:
             print(f"[worker] discovery skipped: {e}")
 
-        # 5. upsert finding if relevant; else drop + log
-        if facts.get("relevant", True):
+        # 5. LLM error -> save to findings for producer retry, skip page_state
+        if facts.get("type") == "error":
+            _upsert_finding(conn, url, facts, folder, page_hash)
+            _safe_rmtree(folder)
+            conn.commit()
+            result = "error"
+            print(f"[worker] LLM error, saved for retry {url}")
+        # 6. upsert finding if relevant; else drop + log
+        elif facts.get("relevant", True):
             _upsert_finding(conn, url, facts, folder, page_hash)
             result = facts.get("type", "?")
             print(f"[worker] upserted {url}: {result} ({link_count} links)")
+            _save_state(conn, url, page_hash, link_count)
+            conn.commit()
         else:
             log(JUNK_FILE, url, "irrelevant")
             _safe_rmtree(folder)
             result = "irrelevant"
             print(f"[worker] irrelevant, dropped {url} ({link_count} links)")
-
-        # 6. remember content + link count
-        _save_state(conn, url, page_hash, link_count)
-        conn.commit()
+            _save_state(conn, url, page_hash, link_count)
+            conn.commit()
 
     print(f"[worker] done {url}: {result}")
     return result

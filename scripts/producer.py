@@ -38,6 +38,7 @@ MAX_PER_DOMAIN = 3         # breadth cap per cycle
 SEED_SCORE = 12.0
 HUB_RESCRAPE_SCORE = 6.0
 LEAF_RESCRAPE_SCORE = 2.0
+ERROR_RETRY_SCORE = 8.0    # above hubs, below seeds — errors deserve a second shot
 HUB_MIN_LINKS = 5
 LEAF_RESCRAPE_HOURS = 12
 
@@ -60,7 +61,7 @@ def dead_onions():
 
 
 def seed_frontier(conn, dead):
-    """Add manual seeds + due-for-rescrape known sites to the frontier."""
+    """Add manual seeds + error retries + due-for-rescrape known sites to the frontier."""
     seeded = set()
     # 1) manual seeds
     if TARGETS_FILE.exists():
@@ -76,7 +77,23 @@ def seed_frontier(conn, dead):
                 continue
             discovery.frontier_add(r, u, SEED_SCORE)
             seeded.add(u)
-    # 2) known hubs / stale leaves from page_state
+    # 2) error retries: re-queue pages where the LLM failed, then delete them
+    error_rows = conn.execute(
+        "SELECT url FROM findings WHERE type='error'"
+    ).fetchall()
+    error_count = 0
+    for (url,) in error_rows:
+        o = onion_of(url)
+        if not o or o in dead or discovery.is_mirror_domain(r, o):
+            continue
+        discovery.frontier_add(r, url, ERROR_RETRY_SCORE)
+        seeded.add(url)
+        error_count += 1
+    if error_count:
+        conn.execute("DELETE FROM findings WHERE type='error'")
+        conn.commit()
+        print(f"Re-queued {error_count} error URLs for retry.")
+    # 3) known hubs / stale leaves from page_state
     now = datetime.datetime.now()
     for url, lc, last_seen in conn.execute(
         "SELECT url, link_count, last_seen FROM page_state"
